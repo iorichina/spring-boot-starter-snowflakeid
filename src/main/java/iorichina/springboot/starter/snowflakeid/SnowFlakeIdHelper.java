@@ -1,24 +1,38 @@
 package iorichina.springboot.starter.snowflakeid;
 
 import lombok.Getter;
-import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.concurrent.TimeUnit;
 
 @Getter
-@Component
 public class SnowFlakeIdHelper {
     private final long startTime;
-    private final boolean timeInMillis;
+    private final TimeUnit unit;
     private final long zoneId;
     private final long nodeId;
 
+    /**
+     * recommended bits of snowflake id:
+     * ------------------
+     * sign bit(1)+
+     * time bits(default 40 with max 34 years in millis)+
+     * zone bits(default 3 bits with max value 7)+
+     * node bit(default 8 bits with max value 255)+
+     * autoincrement(default 12 bits with max value 4095)
+     * ------------------ or
+     * sign bit(1)+
+     * time bits(default 31 with max 68 years in seconds)+
+     * zone bits(default 3 bits with max value 7)+
+     * node bit(default 8 bits with max value 255)+
+     * autoincrement(default 21 bits with max value 2,097,151)
+     */
     private final long bitsOfTime;
     private final long bitsOfZone;
     private final long bitsOfNode;
-    private final long bitsOfAutoincrementMax;
+    private final long bitsOfAutoincrement;
 
     private final long maxTimeNum;
     private final long maxZoneNum;
@@ -32,25 +46,26 @@ public class SnowFlakeIdHelper {
     private final RecyclableAtomicLong sequence;
     private final ZoneOffset offset;
 
-    public SnowFlakeIdHelper(LocalDateTime startTime, boolean timeInMillis, long zoneId, long nodeId, long bitsOfTime, long bitsOfZone, long bitsOfNode, long bitsOfAutoincrementMax, int recyclableLongMaxTry) {
-        offset = OffsetDateTime.now().getOffset();
-        this.startTime = timeInMillis ? startTime.toInstant(offset).toEpochMilli() : startTime.toEpochSecond(offset);
-        this.timeInMillis = timeInMillis;
+    public SnowFlakeIdHelper(LocalDateTime startTime, TimeUnit unit, long zoneId, long nodeId, long bitsOfTime, long bitsOfZone, long bitsOfNode, long bitsOfAutoincrement, int recyclableLongMaxTry) {
+        this.offset = OffsetDateTime.now().getOffset();
+        long timeInMillis = startTime.toInstant(offset).toEpochMilli();
+        this.startTime = unit.convert(timeInMillis, TimeUnit.MILLISECONDS);
+        this.unit = unit;
         this.bitsOfTime = bitsOfTime;
         this.bitsOfZone = bitsOfZone;
         this.bitsOfNode = bitsOfNode;
-        this.bitsOfAutoincrementMax = bitsOfAutoincrementMax;
+        this.bitsOfAutoincrement = bitsOfAutoincrement;
 
         maxTimeNum = -1L ^ (-1L << bitsOfTime);
         maxZoneNum = -1L ^ (-1L << bitsOfZone);
         maxNodeNum = -1L ^ (-1L << bitsOfNode);
-        maxAutoincrementNum = -1L ^ (-1L << bitsOfAutoincrementMax);
+        maxAutoincrementNum = -1L ^ (-1L << bitsOfAutoincrement);
 
         this.zoneId = zoneId % maxZoneNum;
         this.nodeId = nodeId % maxNodeNum;
 
-        leftOfNode = bitsOfAutoincrementMax;
-        leftOfZone = bitsOfAutoincrementMax + bitsOfNode;
+        leftOfNode = bitsOfAutoincrement;
+        leftOfZone = leftOfNode + bitsOfNode;
         leftOfTime = leftOfZone + bitsOfZone;
 
         this.sequence = new RecyclableAtomicLong(maxAutoincrementNum, recyclableLongMaxTry);
@@ -68,10 +83,7 @@ public class SnowFlakeIdHelper {
      */
     public long genId(LocalDateTime localDateTime) {
         long sequence = this.sequence.getAndIncrementWithRecycle();
-        if (this.timeInMillis) {
-            return genId(localDateTime.toInstant(offset).toEpochMilli(), sequence);
-        }
-        return genId(localDateTime.toEpochSecond(offset), sequence);
+        return genId(localDateTime.toInstant(offset).toEpochMilli(), sequence);
     }
 
     /**
@@ -81,10 +93,7 @@ public class SnowFlakeIdHelper {
      */
     public long genId(long timeInMillis) {
         long sequence = this.sequence.getAndIncrementWithRecycle();
-        if (this.timeInMillis) {
-            return genId(timeInMillis, sequence);
-        }
-        return genId(timeInMillis / 1000, sequence);
+        return genId(unit.convert(timeInMillis, TimeUnit.MILLISECONDS), sequence);
     }
 
     /**
@@ -94,14 +103,23 @@ public class SnowFlakeIdHelper {
         return ((time - startTime) << leftOfTime)
                 | (zoneId << leftOfZone)
                 | (nodeId << leftOfNode)
-                | (sequence % maxAutoincrementNum);
+                | (sequence & maxAutoincrementNum);
     }
 
     /**
      * parse timestamp from ID
      */
-    public long parseTimeMillis(long id) {
-        return startTime + (id >>> leftOfTime);
+    public long parseTimeInMillis(long id) {
+        return unit.toMillis(startTime + (id >>> leftOfTime));
+    }
+
+    /**
+     * parse localdatetime from ID
+     */
+    public LocalDateTime parseTime(long id) {
+        long nanos = unit.toNanos(startTime + (id >>> leftOfTime));
+        return LocalDateTime.ofEpochSecond(TimeUnit.SECONDS.convert(nanos, TimeUnit.NANOSECONDS),
+                (int) (nanos % 1_000_000_000), offset);
     }
 
 }

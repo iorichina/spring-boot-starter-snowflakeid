@@ -4,24 +4,32 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 
 class SnowFlakeIdHelperTest {
     @Test
-    void testGenIdAndParseTimeMillis_seconds() {
-        LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
-        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, false, 1, 1, 32, 5, 5, 12, 10);
+    void testGenIdAndParseTime_InMillis_seconds() {
+        System.out.println(System.currentTimeMillis());
+        System.out.println(LocalDateTime.now().toInstant(ZonedDateTime.now().getOffset()).toEpochMilli());
+        System.out.println(8 * 60 * 60 * 1000);
+        System.out.println();
+
+        LocalDateTime start = LocalDateTime.now();
+        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.SECONDS, 1, 1, 32, 5, 5, 12, 10);
         long id = helper.genId();
-        long timeMillis = helper.parseTimeMillis(id);
-        long now = System.currentTimeMillis() / 1000; // 精度为秒
-        Assertions.assertTrue(Math.abs(timeMillis - now) < 2000, "时间戳解析不正确");
+        System.out.println(helper.getStartTime());
+        System.out.println(helper.getMaxTimeNum());
+        long timeMillis = helper.parseTimeInMillis(id);
+        long now = System.currentTimeMillis(); // 精度为秒
+        Assertions.assertTrue(Math.abs(timeMillis - now) < 2000, String.format("时间戳解析不正确: \n期望 %d(±2000), \n实际 %d", now, timeMillis));
     }
 
     @Test
-    void testGenIdAndParseTimeMillis_millis() {
-        LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
-        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, true, 2, 3, 41, 4, 4, 10, 10);
+    void testGenIdAndParseTimeInMillisMillis_() {
+        LocalDateTime start = LocalDateTime.now();
+        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.MILLISECONDS, 2, 3, 41, 4, 4, 10, 10);
         long id = helper.genId();
-        long timeMillis = helper.parseTimeMillis(id);
+        long timeMillis = helper.parseTimeInMillis(id);
         long now = System.currentTimeMillis();
         Assertions.assertTrue(Math.abs(timeMillis - now) < 1000, "时间戳解析不正确");
     }
@@ -30,9 +38,9 @@ class SnowFlakeIdHelperTest {
     void testGenIdWithCustomTime() {
         LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
         LocalDateTime custom = LocalDateTime.of(2024, 7, 19, 12, 0);
-        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, true, 0, 0, 41, 4, 4, 10, 10);
+        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.MILLISECONDS, 0, 0, 41, 4, 4, 10, 10);
         long id = helper.genId(custom);
-        long timeMillis = helper.parseTimeMillis(id);
+        long timeMillis = helper.parseTimeInMillis(id);
         long expected = custom.toInstant(helper.getOffset()).toEpochMilli();
         Assertions.assertTrue(Math.abs(timeMillis - expected) < 10, "自定义时间戳解析不正确");
     }
@@ -40,11 +48,51 @@ class SnowFlakeIdHelperTest {
     @Test
     void testDifferentConfigIdUniqueness() {
         LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
-        SnowFlakeIdHelper helper1 = new SnowFlakeIdHelper(start, true, 1, 1, 41, 4, 4, 10, 10);
-        SnowFlakeIdHelper helper2 = new SnowFlakeIdHelper(start, true, 2, 2, 41, 4, 4, 10, 10);
+        SnowFlakeIdHelper helper1 = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.MILLISECONDS, 1, 1, 41, 4, 4, 10, 10);
+        SnowFlakeIdHelper helper2 = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.MILLISECONDS, 2, 2, 41, 4, 4, 10, 10);
         long id1 = helper1.genId();
         long id2 = helper2.genId();
         Assertions.assertNotEquals(id1, id2, "不同配置下ID应不同");
     }
-}
 
+    @Test
+    void testParseTimeInMillisBoundary_seconds() {
+        LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
+        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.SECONDS, 0, 0, 32, 5, 5, 12, 10);
+        long id = helper.genId(start);
+        long time = helper.parseTimeInMillis(id);
+        long expected = start.toEpochSecond(java.time.ZoneOffset.ofHours(8));
+        Assertions.assertEquals(expected, time, "秒级边界时间戳解析不正确");
+    }
+
+    @Test
+    void testParseTimeInMillisMillisBoundary_() {
+        LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
+        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.MILLISECONDS, 0, 0, 41, 4, 4, 10, 10);
+        long id = helper.genId(start);
+        long time = helper.parseTimeInMillis(id);
+        long expected = start.toInstant(helper.getOffset()).toEpochMilli();
+        Assertions.assertEquals(expected, time, "毫秒级边界时间戳解析不正确");
+    }
+
+    @Test
+    void testParseTimeInMillisFuture() {
+        LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
+        LocalDateTime future = LocalDateTime.of(2030, 1, 1, 0, 0);
+        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.MILLISECONDS, 0, 0, 41, 4, 4, 10, 10);
+        long id = helper.genId(future);
+        long time = helper.parseTimeInMillis(id);
+        long expected = future.toInstant(helper.getOffset()).toEpochMilli();
+        Assertions.assertEquals(expected, time, "未来时间戳解析不正确");
+    }
+
+    @Test
+    void testParseTimeInMillisReverse() {
+        LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
+        SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.MILLISECONDS, 1, 1, 41, 4, 4, 10, 10);
+        long id = helper.genId();
+        long time = helper.parseTimeInMillis(id);
+        long id2 = helper.genId(LocalDateTime.ofEpochSecond(time / 1000, (int) (time % 1000) * 1000000, helper.getOffset()));
+        Assertions.assertNotEquals(0, id2, "反向生成ID应有效");
+    }
+}

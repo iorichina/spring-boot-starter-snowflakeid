@@ -2,7 +2,6 @@ package iorichina.springboot.starter.snowflakeid;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Getter
@@ -12,26 +11,35 @@ public class SnowFlakeIdProperties {
     /**
      * CAS try times while recyclable long fail reset to 0, use synchronized lock after max try
      */
-    @Value("${snowflakeid.recyclable-long-max-try:100}")
-    private int recyclableLongMaxTry;
+//    @Value("${snowflakeid.recyclable-long-max-try:100}")
+    private int recyclableLongMaxTry = 100;
 
     /**
      * start time of snowflake id, default to 2025-07-19T00:00:00
      */
-    @Value("${snowflakeid.start-time:2025-07-19T00:00:00}")
-    private String startTime;
-    @Value("${snowflakeid.time-in-millis:true}")
-    private boolean timeInMillis;
+//    @Value("${snowflakeid.start-time:2025-07-19T00:00:00}")
+    private String startTime = "2025-07-19T00:00:00";
+    /**
+     * NANOSECONDS
+     * MICROSECONDS
+     * MILLISECONDS
+     * SECONDS
+     * MINUTES
+     * HOURS
+     * DAYS
+     */
+//    @Value("${snowflakeid.time-unit:MILLISECONDS}")
+    private String timeUnit = "MILLISECONDS";
     /**
      * zone id and node id are used to distinguish different machines in the same zone
      */
-    @Value("${snowflakeid.zone-id:0}")
-    private long zoneId;
+//    @Value("${snowflakeid.zone-id:0}")
+    private long zoneId = 0;
     /**
-     * default to -1, which means not set, and will be set to last 8 bits of local ipv4 address
+     * default to 0, which means not set, and will be set to last 8 bits of local ipv4 address
      */
-    @Value("${snowflakeid.node-id:-1}")
-    private long nodeId;
+//    @Value("${snowflakeid.node-id:0}")
+    private long nodeId = 0;
 
     /**
      * recommended bits of snowflake id:
@@ -48,12 +56,12 @@ public class SnowFlakeIdProperties {
      * node bit(default 8 bits with max value 255)+
      * autoincrement(default 21 bits with max value 2,097,151)
      */
-    @Value("${snowflakeid.bits-time:40}")
-    private int bitsOfTime;
-    @Value("${snowflakeid.bits-zone:3}")
-    private int bitsOfZone;
-    @Value("${snowflakeid.bits-node:8}")
-    private int bitsOfNode;
-    @Value("${snowflakeid.bits-autoincrement-max:12}")
-    private int bitsOfAutoincrementMax;
+//    @Value("${snowflakeid.bits-of-time:40}")
+    private int bitsOfTime = 40;
+    //    @Value("${snowflakeid.bits-of-zone:3}")
+    private int bitsOfZone = 3;
+    //    @Value("${snowflakeid.bits-of-node:8}")
+    private int bitsOfNode = 8;
+    //    @Value("${snowflakeid.bits-of-autoincrement:12}")
+    private int bitsOfAutoincrement = 12;
 }

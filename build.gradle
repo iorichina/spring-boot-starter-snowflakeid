@@ -7,6 +7,7 @@ group = 'iorichina'
 version = '1.0-SNAPSHOT'
 
 repositories {
+    mavenLocal()
     maven {
         url "https://maven.aliyun.com/repository/public"
     }
@@ -25,19 +26,33 @@ test {
     useJUnitPlatform()
 }
 
+task sourceJar(type: Jar) {
+    from sourceSets.main.allJava
+    archiveClassifier = 'sources'
+}
+
+task javadocJar(type: Jar) {
+    from javadoc
+    archiveClassifier = 'javadoc'
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
+
+            artifact sourceJar
+//            artifact javadocJar
         }
     }
     repositories {
+        mavenLocal()
         maven {
             name = "company"
             url = "http://your.company.maven.repo/repository/maven-releases/"
             credentials {
-                username = "你的用户名"
-                password = "你的密码"
+                username = "your name"
+                password = "your password"
             }
         }
     }
