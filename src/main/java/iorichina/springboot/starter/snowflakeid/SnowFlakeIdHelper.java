@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 public class SnowFlakeIdHelper {
     private final long startTime;
     private final TimeUnit unit;
-    private final long zoneId;
+    private final long tenantId;
     private final long nodeId;
 
     /**
@@ -19,54 +19,54 @@ public class SnowFlakeIdHelper {
      * ------------------
      * sign bit(1)+
      * time bits(default 40 with max 34 years in millis)+
-     * zone bits(default 3 bits with max value 7)+
+     * tenant bits(default 3 bits with max value 7)+
      * node bit(default 8 bits with max value 255)+
      * autoincrement(default 12 bits with max value 4095)
      * ------------------ or
      * sign bit(1)+
      * time bits(default 31 with max 68 years in seconds)+
-     * zone bits(default 3 bits with max value 7)+
+     * tenant bits(default 3 bits with max value 7)+
      * node bit(default 8 bits with max value 255)+
      * autoincrement(default 21 bits with max value 2,097,151)
      */
     private final long bitsOfTime;
-    private final long bitsOfZone;
+    private final long bitsOfTenant;
     private final long bitsOfNode;
     private final long bitsOfAutoincrement;
 
     private final long maxTimeNum;
-    private final long maxZoneNum;
+    private final long maxTenantNum;
     private final long maxNodeNum;
     private final long maxAutoincrementNum;
 
     private final long leftOfNode;
-    private final long leftOfZone;
+    private final long leftOfTenant;
     private final long leftOfTime;
 
     private final RecyclableAtomicLong sequence;
     private final ZoneOffset offset;
 
-    public SnowFlakeIdHelper(LocalDateTime startTime, TimeUnit unit, long zoneId, long nodeId, long bitsOfTime, long bitsOfZone, long bitsOfNode, long bitsOfAutoincrement, int recyclableLongMaxTry) {
+    public SnowFlakeIdHelper(LocalDateTime startTime, TimeUnit unit, long tenantId, long nodeId, long bitsOfTime, long bitsOfTenant, long bitsOfNode, long bitsOfAutoincrement, int recyclableLongMaxTry) {
         this.offset = OffsetDateTime.now().getOffset();
         long timeInMillis = startTime.toInstant(offset).toEpochMilli();
         this.startTime = unit.convert(timeInMillis, TimeUnit.MILLISECONDS);
         this.unit = unit;
         this.bitsOfTime = bitsOfTime;
-        this.bitsOfZone = bitsOfZone;
+        this.bitsOfTenant = bitsOfTenant;
         this.bitsOfNode = bitsOfNode;
         this.bitsOfAutoincrement = bitsOfAutoincrement;
 
         maxTimeNum = -1L ^ (-1L << bitsOfTime);
-        maxZoneNum = -1L ^ (-1L << bitsOfZone);
+        maxTenantNum = -1L ^ (-1L << bitsOfTenant);
         maxNodeNum = -1L ^ (-1L << bitsOfNode);
         maxAutoincrementNum = -1L ^ (-1L << bitsOfAutoincrement);
 
-        this.zoneId = zoneId % maxZoneNum;
+        this.tenantId = tenantId % maxTenantNum;
         this.nodeId = nodeId % maxNodeNum;
 
         leftOfNode = bitsOfAutoincrement;
-        leftOfZone = leftOfNode + bitsOfNode;
-        leftOfTime = leftOfZone + bitsOfZone;
+        leftOfTenant = leftOfNode + bitsOfNode;
+        leftOfTime = leftOfTenant + bitsOfTenant;
 
         this.sequence = new RecyclableAtomicLong(maxAutoincrementNum, recyclableLongMaxTry);
     }
@@ -97,11 +97,11 @@ public class SnowFlakeIdHelper {
     }
 
     /**
-     * generate next ID with special time, zoneId and nodeId
+     * generate next ID with special time
      */
     private long genId(long time, long sequence) {
         return ((time - startTime) << leftOfTime)
-                | (zoneId << leftOfZone)
+                | (tenantId << leftOfTenant)
                 | (nodeId << leftOfNode)
                 | (sequence & maxAutoincrementNum);
     }

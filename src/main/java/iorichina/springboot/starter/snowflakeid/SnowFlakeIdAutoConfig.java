@@ -24,10 +24,10 @@ public class SnowFlakeIdAutoConfig {
             case "DAYS" -> TimeUnit.DAYS;
             default -> TimeUnit.MILLISECONDS;
         };
-        long zoneId = properties.getZoneId();
+        long zoneId = properties.getTenantId();
         long nodeId = properties.getNodeId();
         long bitsOfTime = properties.getBitsOfTime();
-        long bitsOfZone = properties.getBitsOfZone();
+        long bitsOfZone = properties.getBitsOfTenant();
         long bitsOfNode = properties.getBitsOfNode();
         long bitsOfAutoincrementMax = properties.getBitsOfAutoincrement();
 
