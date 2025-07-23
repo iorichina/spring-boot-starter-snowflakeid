@@ -12,16 +12,16 @@ graph RL
     Node[Node]
     Sequence[Sequence]
 
-    Sequence -->| 12 bit  | Tenant
-    Tenant -->| 8 bit  | Node
-    Node -->| 3 bit  | Time
+    Sequence -->| 12 bit  | Node
+    Node -->| 8 bit  | Tenant
+    Tenant -->| 3 bit  | Time
     Time -->| 40 bit  | Sign
     Sign -->| 1 bit  | Sign
 
 ```
 You can define bits of each part except `Sign` which is always `0`.
 
-## How to use?
+## 2. How to use?
 1. Add dependency
 If you are using gradle 
 ```
@@ -48,7 +48,7 @@ long timestamp = snowFlakeIdHelper.parseTimeInMillis(id);
 LocalDateTime ldt = snowFlakeIdHelper.parseTime(id);
 ```
 
-## 2. How to config?
+## 3. How to config?
 Configure in your `application.yml` file.
 ```yml
 snowflakeid.startTime=2025-07-19T00:00:00
@@ -66,17 +66,17 @@ snowflakeid.recyclableLongMaxTry=1000
 ```
 
 Here is the meaning of each configuration:
-### 2.1. `startTime` 
+### 3.1. `startTime` 
 - `startTime` is the base time of `Time` of snowflakeid. 
 - We use `currentTime - startTime` to make `Time` smaller.
 - So we can generate more ids in a long future. 
 - Such as `40` bits of `Time` in `MILLISECONDS` can generate ids about 34 years.
 
-### 2.2. `timeUnit` 
+### 3.2. `timeUnit` 
 - `timeUnit` is the unit of `Time` of snowflakeid. 
 - Valid values are `MILLISECONDS` `SECONDS` `MINUTES` `HOURS` `DAYS`
 
-### 2.3. `tenantId` `nodeId`
+### 3.3. `tenantId` `nodeId`
 `tenantId` and `nodeId` are used to generate distributed unique.
 
 We use IPv4 address of current machine to generate a new `nodeId` if `-1 == nodeId`:
@@ -85,17 +85,17 @@ We use IPv4 address of current machine to generate a new `nodeId` if `-1 == node
 - get last `bitsOfNode` bits of ipv4 as `nodeId`
 - make sure `nodeId = nodeId % (1 << bitsOfNode)`
 
-### `bitsOf*`
+### 3.4. `bitsOf*`
 `bitsOfTime` `bitsOfTenant` `bitsOfNode` `bitsOfAutoincrement` are used to define the bits of each part of snowflakeid.
 
-### `useCache` `maximumSize` `recordStats`
+### 3.5. `useCache` `maximumSize` `recordStats`
 We use loading-cache to get sequence of each unit of time.
 
 Such as 1024 ms has 1024 sequence to generate recyclable long.
 
 To make sure we could get autoincrement number from 0 every unit time.
 
-### `recyclableLongMaxTry`
+### 3.6. `recyclableLongMaxTry`
 If you don't care about the autoincrement number start from 0 every unit time, you can set `useCache=false` and set `recyclableLongMaxTry` to a number.
 
 We will use `RecyclableAtomicLong` to get a recyclable long as autoincrement number.
@@ -104,8 +104,8 @@ We will use `RecyclableAtomicLong` to get a recyclable long as autoincrement num
 
 It depends on CAS to recycle and will try max `recyclableLongMaxTry` times on CAS failure.
 
-## Sample
-### Default usage
+## 4. Sample
+### 4.1. Default usage
 Recording timestamp in millis
 - sign bit(1)+
 - time bits(default 40 with max 34 years in millis)+
@@ -114,7 +114,7 @@ Recording timestamp in millis
 - autoincrement(default 12 bits with max value 4095)
 
 Default usage does not need to configure anything.
-### Timestamp in Seconds 
+### 4.2. Timestamp in Seconds 
 Recording timestamp in seconds
 - sign bit(1)+
 - time bits(default 31 with max 68 years in seconds)+
@@ -134,7 +134,7 @@ snowflakeid.maximumSize=60
 ```
 We set `maximumSize` to `60` because we need not to cache too much sequence.
 
-### Special TenantId and NodeId
+### 4.3. Special TenantId and NodeId
 Recording timestamp in millis
 - sign bit(1)+
 - time bits(default 41 with max 68 years in millis)+
@@ -154,5 +154,5 @@ snowflakeid.bitsOfAutoincrement=15
 snowflakeid.maximumSize=2000
 ```
 
-## TODO list
+## 5. TODO list
 - using dynamic `tenantId` and `nodeId` from outer source
