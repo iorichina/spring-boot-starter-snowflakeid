@@ -4,13 +4,18 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
-import java.time.ZonedDateTime;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class SnowFlakeIdHelperTest {
     @Test
     void testGenIdAndParseTime_InMillis_seconds() {
         System.out.println(System.currentTimeMillis());
-        System.out.println(LocalDateTime.now().toInstant(ZonedDateTime.now().getOffset()).toEpochMilli());
+        System.out.println(LocalDateTime.now().toInstant(ZoneOffset.ofHours(8)).toEpochMilli());
         System.out.println(8 * 60 * 60 * 1000);
         System.out.println();
 
@@ -60,7 +65,7 @@ class SnowFlakeIdHelperTest {
         LocalDateTime start = LocalDateTime.of(2024, 1, 1, 0, 0);
         SnowFlakeIdHelper helper = new SnowFlakeIdHelper(start, java.util.concurrent.TimeUnit.SECONDS, 0, 0, 32, 5, 5, 12, 10);
         long id = helper.genId(start);
-        long time = helper.parseTimeInMillis(id);
+        long time = helper.parseTimeInMillis(id) / 1000;
         long expected = start.toEpochSecond(java.time.ZoneOffset.ofHours(8));
         Assertions.assertEquals(expected, time, "秒级边界时间戳解析不正确");
     }
@@ -94,5 +99,33 @@ class SnowFlakeIdHelperTest {
         long time = helper.parseTimeInMillis(id);
         long id2 = helper.genId(LocalDateTime.ofEpochSecond(time / 1000, (int) (time % 1000) * 1000000, helper.getOffset()));
         Assertions.assertNotEquals(0, id2, "反向生成ID应有效");
+    }
+
+    /**
+     * Test for parseTime method
+     */
+    @Test
+    void testParseTime() {
+        // Arrange
+        LocalDateTime startTime = LocalDateTime.now();
+        TimeUnit unit = TimeUnit.MILLISECONDS;
+        long tenantId = 1;
+        long nodeId = 1;
+        long bitsOfTime = 40;
+        long bitsOfTenant = 3;
+        long bitsOfNode = 8;
+        long bitsOfAutoincrement = 12;
+        int recyclableLongMaxTry = 10;
+
+        SnowFlakeIdHelper snowFlakeIdHelper = new SnowFlakeIdHelper(startTime, unit, tenantId, nodeId, bitsOfTime, bitsOfTenant, bitsOfNode, bitsOfAutoincrement, recyclableLongMaxTry);
+
+        // Act
+        long id = snowFlakeIdHelper.genId();
+        LocalDateTime parsedTime = snowFlakeIdHelper.parseTime(id);
+
+        // Assert
+        assertNotNull(parsedTime);
+        // Additional assertions can be added based on expected behavior
+        assertEquals(startTime.toInstant(OffsetTime.now().getOffset()).toEpochMilli() / 10, parsedTime.toInstant(OffsetTime.now().getOffset()).toEpochMilli() / 10, "Parsed time should match the original time");
     }
 }

@@ -9,15 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "snowflakeid")
 public class SnowFlakeIdProperties {
     /**
-     * CAS try times while recyclable long fail reset to 0, use synchronized lock after max try
-     */
-//    @Value("${snowflakeid.recyclable-long-max-try:100}")
-    private int recyclableLongMaxTry = 1000;
-
-    /**
      * start time of snowflake id, default to 2025-07-19T00:00:00
      */
-//    @Value("${snowflakeid.start-time:2025-07-19T00:00:00}")
     private String startTime = "2025-07-19T00:00:00";
     /**
      * NANOSECONDS
@@ -28,18 +21,15 @@ public class SnowFlakeIdProperties {
      * HOURS
      * DAYS
      */
-//    @Value("${snowflakeid.time-unit:MILLISECONDS}")
     private String timeUnit = "MILLISECONDS";
     /**
-     * tenant id and node id are used to distinguish different machines in the same tenant
+     * tenant id and node id are used to generate distributed unique
      */
-//    @Value("${snowflakeid.tenant-id:0}")
     private long tenantId = 0;
     /**
-     * default to 0, which means not set, and will be set to last 8 bits of local ipv4 address
+     * -1 means we will be set to last `bitsOfNode` bits of a long value of local ipv4 address
      */
-//    @Value("${snowflakeid.node-id:0}")
-    private long nodeId = 0;
+    private long nodeId = -1;
 
     /**
      * recommended bits of snowflake id:
@@ -56,12 +46,20 @@ public class SnowFlakeIdProperties {
      * node bit(default 8 bits with max value 255)+
      * autoincrement(default 21 bits with max value 2,097,151)
      */
-//    @Value("${snowflakeid.bits-of-time:40}")
     private int bitsOfTime = 40;
-    //    @Value("${snowflakeid.bits-of-tenant:3}")
     private int bitsOfTenant = 3;
-    //    @Value("${snowflakeid.bits-of-node:8}")
     private int bitsOfNode = 8;
-    //    @Value("${snowflakeid.bits-of-autoincrement:12}")
     private int bitsOfAutoincrement = 12;
+
+    /**
+     * use loading-cache for recyclable long, default to true
+     */
+    private boolean useCache = true;
+    private int maximumSize = 1024;//such as 1024 ms has 1024 sequence to generate recyclable long
+    private boolean recordStats = true;
+    /**
+     * if useCache=false, set CAS try times while recyclable long fail reset to 0, use synchronized lock after max try
+     */
+    private int recyclableLongMaxTry = 1000;
+
 }

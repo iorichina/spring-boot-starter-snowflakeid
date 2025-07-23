@@ -1,12 +1,32 @@
 package iorichina.springboot.starter.snowflakeid;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.Getter;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * recommended bits of snowflake id:
+ * ------------------
+ * sign bit(1)+
+ * time bits(default 40 with max 34 years in millis)+
+ * tenant bits(default 3 bits with max value 7)+
+ * node bit(default 8 bits with max value 255)+
+ * autoincrement(default 12 bits with max value 4095)
+ * ------------------
+ * sign bit(1)+
+ * time bits(default 31 with max 68 years in seconds)+
+ * tenant bits(default 3 bits with max value 7)+
+ * node bit(default 8 bits with max value 255)+
+ * autoincrement(default 21 bits with max value 2,097,151)
+ */
 @Getter
 public class SnowFlakeIdHelper {
     private final long startTime;
@@ -14,21 +34,6 @@ public class SnowFlakeIdHelper {
     private final long tenantId;
     private final long nodeId;
 
-    /**
-     * recommended bits of snowflake id:
-     * ------------------
-     * sign bit(1)+
-     * time bits(default 40 with max 34 years in millis)+
-     * tenant bits(default 3 bits with max value 7)+
-     * node bit(default 8 bits with max value 255)+
-     * autoincrement(default 12 bits with max value 4095)
-     * ------------------ or
-     * sign bit(1)+
-     * time bits(default 31 with max 68 years in seconds)+
-     * tenant bits(default 3 bits with max value 7)+
-     * node bit(default 8 bits with max value 255)+
-     * autoincrement(default 21 bits with max value 2,097,151)
-     */
     private final long bitsOfTime;
     private final long bitsOfTenant;
     private final long bitsOfNode;
@@ -43,61 +48,138 @@ public class SnowFlakeIdHelper {
     private final long leftOfTenant;
     private final long leftOfTime;
 
-    private final RecyclableAtomicLong sequence;
+    private final Cache<Long, AtomicLong> sequenceCache;
     private final ZoneOffset offset;
+    private final RecyclableAtomicLong sequence;
 
-    public SnowFlakeIdHelper(LocalDateTime startTime, TimeUnit unit, long tenantId, long nodeId, long bitsOfTime, long bitsOfTenant, long bitsOfNode, long bitsOfAutoincrement, int recyclableLongMaxTry) {
+    /**
+     * using loading-cache to store sequence
+     */
+    public SnowFlakeIdHelper(LocalDateTime startTime, TimeUnit unit, long tenantId, long nodeId, long bitsOfTime, long bitsOfTenant, long bitsOfNode, long bitsOfAutoincrement, int maximumSize, boolean recordStats) {
         this.offset = OffsetDateTime.now().getOffset();
-        long timeInMillis = startTime.toInstant(offset).toEpochMilli();
-        this.startTime = unit.convert(timeInMillis, TimeUnit.MILLISECONDS);
+        Instant instant = startTime.toInstant(this.offset);
+        this.startTime = unit.convert(instant.getEpochSecond() * 1_000_000_000L + instant.getNano(), TimeUnit.NANOSECONDS);
         this.unit = unit;
         this.bitsOfTime = bitsOfTime;
         this.bitsOfTenant = bitsOfTenant;
         this.bitsOfNode = bitsOfNode;
         this.bitsOfAutoincrement = bitsOfAutoincrement;
 
-        maxTimeNum = -1L ^ (-1L << bitsOfTime);
-        maxTenantNum = -1L ^ (-1L << bitsOfTenant);
-        maxNodeNum = -1L ^ (-1L << bitsOfNode);
-        maxAutoincrementNum = -1L ^ (-1L << bitsOfAutoincrement);
+        this.maxTimeNum = -1L ^ (-1L << bitsOfTime);
+        this.maxTenantNum = -1L ^ (-1L << bitsOfTenant);
+        this.maxNodeNum = -1L ^ (-1L << bitsOfNode);
+        this.maxAutoincrementNum = -1L ^ (-1L << bitsOfAutoincrement);
 
-        this.tenantId = tenantId % maxTenantNum;
-        this.nodeId = nodeId % maxNodeNum;
+        this.tenantId = tenantId & this.maxTenantNum;
+        this.nodeId = genNodeId(nodeId, this.maxNodeNum);
 
-        leftOfNode = bitsOfAutoincrement;
-        leftOfTenant = leftOfNode + bitsOfNode;
-        leftOfTime = leftOfTenant + bitsOfTenant;
+        this.leftOfNode = bitsOfAutoincrement;
+        this.leftOfTenant = this.leftOfNode + bitsOfNode;
+        this.leftOfTime = this.leftOfTenant + bitsOfTenant;
 
-        this.sequence = new RecyclableAtomicLong(maxAutoincrementNum, recyclableLongMaxTry);
+        this.sequence = null;
+        Caffeine<Object, Object> caffeine = Caffeine.newBuilder().expireAfterWrite(maximumSize, unit).maximumSize(maximumSize);
+        if (recordStats) {
+            caffeine.recordStats();
+        }
+        this.sequenceCache = caffeine.build();
+    }
+
+    public SnowFlakeIdHelper(LocalDateTime startTime, TimeUnit unit, long tenantId, long nodeId, long bitsOfTime, long bitsOfTenant, long bitsOfNode, long bitsOfAutoincrement, int recyclableLongMaxTry) {
+        this.offset = OffsetDateTime.now().getOffset();
+        Instant instant = startTime.toInstant(this.offset);
+        this.startTime = unit.convert(instant.getEpochSecond() * 1_000_000_000L + instant.getNano(), TimeUnit.NANOSECONDS);
+        this.unit = unit;
+        this.bitsOfTime = bitsOfTime;
+        this.bitsOfTenant = bitsOfTenant;
+        this.bitsOfNode = bitsOfNode;
+        this.bitsOfAutoincrement = bitsOfAutoincrement;
+
+        this.maxTimeNum = -1L ^ (-1L << bitsOfTime);
+        this.maxTenantNum = -1L ^ (-1L << bitsOfTenant);
+        this.maxNodeNum = -1L ^ (-1L << bitsOfNode);
+        this.maxAutoincrementNum = -1L ^ (-1L << bitsOfAutoincrement);
+
+        this.tenantId = tenantId & this.maxTenantNum;
+        this.nodeId = genNodeId(nodeId, this.maxNodeNum);
+
+        this.leftOfNode = bitsOfAutoincrement;
+        this.leftOfTenant = this.leftOfNode + bitsOfNode;
+        this.leftOfTime = this.leftOfTenant + bitsOfTenant;
+
+        this.sequence = new RecyclableAtomicLong(this.maxAutoincrementNum, recyclableLongMaxTry);
+        this.sequenceCache = null;
+    }
+
+    private long genNodeId(long nodeId, long maxNodeNum) {
+        if (-1 != nodeId) {
+            return nodeId & maxNodeNum;
+        }
+        //use last bitsOfNode of long value of ipv4 as nodeId
+        String ipv4 = NetworkUtils.getLocalIpV4();
+        if (null != ipv4) {
+            nodeId = NetworkUtils.ipV4ToLong(ipv4);
+        } else {
+            //fallback if we can't get ipv4
+            nodeId = ThreadLocalRandom.current().nextLong(maxNodeNum + 1);
+        }
+        return nodeId & maxNodeNum;
     }
 
     /**
-     * generate next ID
+     * get sequence by unitTime in current unit
+     */
+    private long getSequence(long unitTime) {
+        if (null == sequenceCache) {
+            return sequence.getAndIncrementWithRecycle();
+        }
+        return sequenceCache.get(unitTime, k -> loadSequence(k)).getAndIncrement();
+    }
+
+    /**
+     * load sequence cache with initial value 0
+     */
+    private AtomicLong loadSequence(long unitTime) {
+        return new AtomicLong(0);
+    }
+
+    /**
+     * generate next ID in current timestamp
      */
     public long genId() {
         return genId(System.currentTimeMillis());
     }
 
     /**
-     * generate next ID with special time
-     */
-    public long genId(LocalDateTime localDateTime) {
-        long sequence = this.sequence.getAndIncrementWithRecycle();
-        return genId(localDateTime.toInstant(offset).toEpochMilli(), sequence);
-    }
-
-    /**
-     * generate next ID with special time
+     * generate next ID with special time in millis
      *
      * @param timeInMillis time in milliseconds since epoch in local timezone
      */
     public long genId(long timeInMillis) {
-        long sequence = this.sequence.getAndIncrementWithRecycle();
-        return genId(unit.convert(timeInMillis, TimeUnit.MILLISECONDS), sequence);
+        long time = unit.convert(timeInMillis, TimeUnit.MILLISECONDS);
+        long sequence = getSequence(time);
+        return genId(time, sequence);
     }
 
     /**
-     * generate next ID with special time
+     * generate next ID with special local date time
+     */
+    public long genId(LocalDateTime localDateTime) {
+        Instant instant = localDateTime.toInstant(offset);
+        return genId(instant.getEpochSecond() * 1_000_000_000L + instant.getNano(), TimeUnit.NANOSECONDS);
+    }
+
+    /**
+     * generate next ID with special time and time unit
+     */
+    public long genId(long time, TimeUnit unit) {
+        time = this.unit.convert(time, unit);
+        long sequence = getSequence(time);
+        return genId(time, sequence);
+    }
+
+    /**
+     * generate next ID with special time and sequence
      */
     private long genId(long time, long sequence) {
         return ((time - startTime) << leftOfTime)

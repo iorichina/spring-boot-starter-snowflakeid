@@ -31,6 +31,9 @@ public class SnowFlakeIdAutoConfig {
         long bitsOfNode = properties.getBitsOfNode();
         long bitsOfAutoincrementMax = properties.getBitsOfAutoincrement();
 
+        if (properties.isUseCache()) {
+            return new SnowFlakeIdHelper(startTime, unit, zoneId, nodeId, bitsOfTime, bitsOfZone, bitsOfNode, bitsOfAutoincrementMax, properties.getMaximumSize(), properties.isRecordStats());
+        }
         return new SnowFlakeIdHelper(startTime, unit, zoneId, nodeId, bitsOfTime, bitsOfZone, bitsOfNode, bitsOfAutoincrementMax, properties.getRecyclableLongMaxTry());
     }
 }
