@@ -52,15 +52,18 @@ publishing {
             artifact sourceJar
 //            artifact javadocJar
         }
+        gpr(MavenPublication) {
+            from(components.java)
+        }
     }
     repositories {
         mavenLocal()
         maven {
-            name = "company"
-            url = "http://your.company.maven.repo/repository/maven-releases/"
+            name = "GitHubPackages"
+            url = "https://maven.pkg.github.com/iorichina/spring-boot-starter-snowflakeid"
             credentials {
-                username = "your name"
-                password = "your password"
+                username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
+                password = project.findProperty("gpr.key") ?: System.getenv("TOKEN")
             }
         }
     }
